@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPY 200-MA Backtesting Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 20px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 25px;
+            padding: 12px 30px;
+            font-weight: 600;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        .form-control {
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            padding: 12px 15px;
+        }
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .metric-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 15px;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .metric-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        .positive { color: #28a745; }
+        .negative { color: #dc3545; }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .trade-table {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px;
+        }
+        .table td {
+            padding: 12px 15px;
+            border: none;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .status-running {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .status-completed {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Header -->
+        <div class="card">
+            <div class="card-header">
+                <h1 class="mb-0">
+                    <i class="fas fa-chart-line me-2"></i>
+                    SPY 200-MA Backtesting Dashboard
+                </h1>
+                <p class="mb-0 mt-2">Interactive backtesting platform for SPY 200-day moving average strategy</p>
+            </div>
+        </div>
+
+        <!-- Parameter Form -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-4">
+                    <i class="fas fa-cog me-2"></i>
+                    Strategy Parameters
+                </h5>
+                <form id="backtestForm">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label for="sma_period" class="form-label">SMA Period</label>
+                            <input type="number" class="form-control" id="sma_period" name="sma_period" value="200" min="10" max="500">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="start_date" class="form-label">Start Date</label>
+                            <input type="date" class="form-control" id="start_date" name="start_date" value="2010-01-01">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="end_date" class="form-label">End Date</label>
+                            <input type="date" class="form-control" id="end_date" name="end_date" value="2024-12-31">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="initial_cash" class="form-label">Initial Capital ($)</label>
+                            <input type="number" class="form-control" id="initial_cash" name="initial_cash" value="100000" min="1000" step="1000">
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary" id="runBtn">
+                                <i class="fas fa-play me-2"></i>
+                                Run Backtest
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary ms-2" id="downloadBtn" style="display: none;">
+                                <i class="fas fa-download me-2"></i>
+                                Download Trade Log
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div class="loading" id="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <h4 class="mt-3">Running Backtest...</h4>
+            <p class="text-muted">This may take a few moments</p>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results" style="display: none;">
+            <!-- Performance Metrics -->
+            <div class="row" id="metrics">
+                <!-- Metrics will be populated here -->
+            </div>
+
+            <!-- Charts -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="chart-container">
+                        <h5 class="mb-3">
+                            <i class="fas fa-chart-area me-2"></i>
+                            Equity Curve
+                        </h5>
+                        <div id="equityChart"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="chart-container">
+                        <h5 class="mb-3">
+                            <i class="fas fa-chart-line me-2"></i>
+                            Drawdown
+                        </h5>
+                        <div id="drawdownChart"></div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="chart-container">
+                        <h5 class="mb-3">
+                            <i class="fas fa-chart-bar me-2"></i>
+                            Trade Returns
+                        </h5>
+                        <div id="tradeReturnsChart"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trade Log -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="trade-table">
+                        <h5 class="p-3 mb-0 border-bottom">
+                            <i class="fas fa-list me-2"></i>
+                            Trade Log
+                        </h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0" id="tradeTable">
+                                <thead>
+                                    <tr>
+                                        <th>Trade #</th>
+                                        <th>Entry Date</th>
+                                        <th>Exit Date</th>
+                                        <th>Entry Price</th>
+                                        <th>Exit Price</th>
+                                        <th>Size</th>
+                                        <th>P&L</th>
+                                        <th>Return %</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tradeTableBody">
+                                    <!-- Trades will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let pollInterval;
+
+        $(document).ready(function() {
+            // Form submission
+            $('#backtestForm').on('submit', function(e) {
+                e.preventDefault();
+                runBacktest();
+            });
+
+            // Download button
+            $('#downloadBtn').on('click', function() {
+                window.location.href = '/download_trade_log';
+            });
+        });
+
+        function runBacktest() {
+            const formData = new FormData($('#backtestForm')[0]);
+            
+            // Show loading
+            $('#loading').show();
+            $('#results').hide();
+            $('#runBtn').prop('disabled', true);
+            
+            // Clear previous results
+            $('#metrics').empty();
+            $('#tradeTableBody').empty();
+            
+            $.ajax({
+                url: '/run_backtest',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.error) {
+                        showError(response.error);
+                    } else {
+                        // Start polling for results
+                        pollResults();
+                    }
+                },
+                error: function() {
+                    showError('Failed to start backtest');
+                }
+            });
+        }
+
+        function pollResults() {
+            pollInterval = setInterval(function() {
+                $.get('/get_results', function(response) {
+                    if (response.status === 'running') {
+                        // Continue polling
+                        return;
+                    } else if (response.status === 'error') {
+                        clearInterval(pollInterval);
+                        showError(response.error);
+                    } else if (response.status === 'completed') {
+                        clearInterval(pollInterval);
+                        displayResults(response);
+                    }
+                });
+            }, 1000);
+        }
+
+        function displayResults(response) {
+            $('#loading').hide();
+            $('#results').show();
+            $('#runBtn').prop('disabled', false);
+            $('#downloadBtn').show();
+            
+            const results = response.results;
+            const charts = response.charts;
+            
+            // Display metrics
+            displayMetrics(results);
+            
+            // Display charts
+            if (charts.equity_curve) {
+                Plotly.newPlot('equityChart', JSON.parse(charts.equity_curve));
+            }
+            if (charts.drawdown) {
+                Plotly.newPlot('drawdownChart', JSON.parse(charts.drawdown));
+            }
+            if (charts.trade_returns) {
+                Plotly.newPlot('tradeReturnsChart', JSON.parse(charts.trade_returns));
+            }
+            
+            // Display trade log
+            displayTradeLog(results.trades);
+        }
+
+        function displayMetrics(results) {
+            const metrics = [
+                { label: 'Total Return', value: (results.total_return || 0).toFixed(2) + '%', class: (results.total_return || 0) >= 0 ? 'positive' : 'negative' },
+                { label: 'Buy & Hold Return', value: (results.buy_hold_return || 0).toFixed(2) + '%', class: (results.buy_hold_return || 0) >= 0 ? 'positive' : 'negative' },
+                { label: 'Max Drawdown', value: (results.max_drawdown || 0).toFixed(2) + '%', class: 'negative' },
+                { label: 'Sharpe Ratio', value: (results.sharpe_ratio || 0).toFixed(3), class: (results.sharpe_ratio || 0) >= 0 ? 'positive' : 'negative' },
+                { label: 'Win Rate', value: (results.win_rate || 0).toFixed(1) + '%', class: (results.win_rate || 0) >= 50 ? 'positive' : 'negative' },
+                { label: 'Total Trades', value: results.num_trades || 0, class: '' },
+                { label: 'Final Value', value: '$' + (results.final_equity || 0).toLocaleString(), class: 'positive' },
+                { label: 'Profit Factor', value: (results.profit_factor || 0).toFixed(2), class: (results.profit_factor || 0) >= 1 ? 'positive' : 'negative' },
+                { label: 'Avg Trade', value: (results.avg_trade || 0).toFixed(2) + '%', class: (results.avg_trade || 0) >= 0 ? 'positive' : 'negative' }
+            ];
+            
+            let metricsHtml = '';
+            metrics.forEach(metric => {
+                metricsHtml += `
+                    <div class="col-md-2 col-sm-4 col-6">
+                        <div class="metric-card">
+                            <div class="metric-value ${metric.class}">${metric.value}</div>
+                            <div class="metric-label">${metric.label}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            $('#metrics').html(metricsHtml);
+        }
+
+        function displayTradeLog(trades) {
+            let tableHtml = '';
+            
+            if (!trades || trades.length === 0) {
+                tableHtml = '<tr><td colspan="8" class="text-center">No trades available</td></tr>';
+            } else if (typeof trades[0] === 'string') {
+                // Trades are strings, display them as a simple list
+                trades.forEach((trade, index) => {
+                    tableHtml += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td colspan="7">${trade}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                // Trades are structured objects
+                trades.forEach(trade => {
+                    const returnClass = (trade.return_pct || 0) >= 0 ? 'positive' : 'negative';
+                    tableHtml += `
+                        <tr>
+                            <td>${trade.trade_number || 'N/A'}</td>
+                            <td>${trade.entry_date || 'N/A'}</td>
+                            <td>${trade.exit_date || 'N/A'}</td>
+                            <td>$${(trade.entry_price || 0).toFixed(2)}</td>
+                            <td>$${(trade.exit_price || 0).toFixed(2)}</td>
+                            <td>${trade.size || 'N/A'}</td>
+                            <td class="${returnClass}">$${(trade.pnl || 0).toLocaleString()}</td>
+                            <td class="${returnClass}">${(trade.return_pct || 0).toFixed(2)}%</td>
+                        </tr>
+                    `;
+                });
+            }
+            
+            $('#tradeTableBody').html(tableHtml);
+        }
+
+        function showError(message) {
+            $('#loading').hide();
+            $('#runBtn').prop('disabled', false);
+            
+            // Show error alert
+            const alertHtml = `
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            $('#results').html(alertHtml).show();
+        }
+    </script>
+</body>
+</html> 
