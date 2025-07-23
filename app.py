@@ -1,5 +1,5 @@
 # app.py
-from flask import Flask, request, jsonify, render_template_string, send_file
+from flask import Flask, request, jsonify, render_template, send_file
 import pandas as pd
 import datetime as dt
 from backtesting import Backtest, Strategy
@@ -14,190 +14,6 @@ app = Flask(__name__)
 # Create a directory to store temporary files if it doesn't exist
 if not os.path.exists('static'):
     os.makedirs('static')
-
-# --- HTML & JavaScript Frontend ---
-# This is the user interface for the application.
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Backtesting.py Frontend</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        .loader {
-            border: 8px solid #f3f3f3;
-            border-top: 8px solid #3498db;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 2s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
-</head>
-<body class="bg-gray-100 text-gray-800">
-
-    <div class="container mx-auto p-4 md:p-8">
-        <header class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-gray-900">Strategy Backtester</h1>
-            <p class="text-lg text-gray-600 mt-2">Upload your data and configure parameters to run a backtest.</p>
-        </header>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Control Panel -->
-            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
-                <h2 class="text-2xl font-semibold mb-6 border-b pb-4">Configuration</h2>
-                <form id="backtest-form">
-                    <!-- File Upload -->
-                    <div class="mb-4">
-                        <label for="csv-file" class="block text-sm font-medium text-gray-700 mb-2">Upload Unadjusted Intraday Data</label>
-                        <input type="file" id="csv-file" name="csv-file" accept=".csv" required
-                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                    </div>
-
-                    <!-- Date Range -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label for="start_date" class="block text-sm font-medium text-gray-700">Start Date (Optional)</label>
-                            <input type="date" id="start_date" name="start_date" value="2016-01-01" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
-                        </div>
-                        <div>
-                            <label for="end_date" class="block text-sm font-medium text-gray-700">End Date (Optional)</label>
-                            <input type="date" id="end_date" name="end_date" value="2023-02-16" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
-                        </div>
-                    </div>
-
-                    <!-- Strategy Parameters -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label for="open_range_minutes" class="block text-sm font-medium text-gray-700">Open Range (min)</label>
-                            <input type="number" id="open_range_minutes" name="open_range_minutes" value="5" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
-                        </div>
-                        <div>
-                            <label for="risk_percent" class="block text-sm font-medium text-gray-700">Risk (%)</label>
-                            <input type="number" id="risk_percent" name="risk_percent" value="1.0" step="0.1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
-                        </div>
-                        <div>
-                            <label for="take_profit_multiple" class="block text-sm font-medium text-gray-700">TP Multiple</label>
-                            <input type="number" id="take_profit_multiple" name="take_profit_multiple" value="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
-                        </div>
-                        <div>
-                            <label for="max_leverage" class="block text-sm font-medium text-gray-700">Max Leverage</label>
-                            <input type="number" id="max_leverage" name="max_leverage" value="4" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
-                        </div>
-                         <div>
-                            <label for="cash" class="block text-sm font-medium text-gray-700">Initial Cash</label>
-                            <input type="number" id="cash" name="cash" value="25000" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
-                        </div>
-                        <div>
-                            <label for="per_share_commission" class="block text-sm font-medium text-gray-700">Per Share Commission ($)</label>
-                            <input type="number" id="per_share_commission" name="per_share_commission" value="0.0005" step="0.0001" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
-                        </div>
-                        <div>
-                            <label for="slippage_cents" class="block text-sm font-medium text-gray-700">Slippage (Cents/Share)</label>
-                            <input type="number" id="slippage_cents" name="slippage_cents" value="0.0" step="0.1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2">
-                        </div>
-                    </div>
-
-                    <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-300 ease-in-out">
-                        Run Backtest
-                    </button>
-                </form>
-            </div>
-
-            <!-- Results Display -->
-            <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
-                <h2 class="text-2xl font-semibold mb-6 border-b pb-4">Results</h2>
-                <div id="results-container" class="text-center">
-                    <div id="loader" class="loader mx-auto my-8 hidden"></div>
-                    <div id="stats-container"></div>
-                    <div id="export-container" class="mt-6"></div>
-                    <div id="plot-container" class="mt-6"></div>
-                    <div id="error-container" class="text-red-500 mt-4"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        document.getElementById('backtest-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const form = e.target;
-            const formData = new FormData(form);
-            const loader = document.getElementById('loader');
-            const statsContainer = document.getElementById('stats-container');
-            const plotContainer = document.getElementById('plot-container');
-            const errorContainer = document.getElementById('error-container');
-            const exportContainer = document.getElementById('export-container');
-
-            // Clear previous results and show loader
-            statsContainer.innerHTML = '';
-            plotContainer.innerHTML = '';
-            errorContainer.innerHTML = '';
-            exportContainer.innerHTML = '';
-            loader.classList.remove('hidden');
-
-            try {
-                const response = await fetch('/run_backtest', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'An unknown error occurred.');
-                }
-
-                const data = await response.json();
-
-                // Display Stats
-                let statsHtml = '<h3 class="text-xl font-semibold mb-4">Key Statistics</h3><div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-left">';
-                for (const [key, value] of Object.entries(data.stats)) {
-                    let formattedValue = typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(2) : value;
-                    statsHtml += `<div class="bg-gray-50 p-3 rounded-lg"><p class="text-sm text-gray-500">${key}</p><p class="text-lg font-medium">${formattedValue}</p></div>`;
-                }
-                statsHtml += '</div>';
-                statsContainer.innerHTML = statsHtml;
-
-                // Add export button if trades exist
-                if (data.trade_file_id) {
-                    const exportBtn = document.createElement('a');
-                    exportBtn.href = `/export_trades?id=${data.trade_file_id}`;
-                    exportBtn.className = 'inline-block mt-4 bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition duration-300';
-                    exportBtn.innerText = 'Export Trade Log (CSV)';
-                    exportBtn.download = 'trade_log.csv';
-                    exportContainer.appendChild(exportBtn);
-                }
-
-                // Display Plot or a warning if plotting failed
-                if (data.plot_url) {
-                    const plotUrl = data.plot_url + '?t=' + new Date().getTime(); // Cache-busting
-                    plotContainer.innerHTML = `<h3 class="text-xl font-semibold my-4">Equity Curve</h3><iframe src="${plotUrl}" class="w-full h-[600px] border-0 rounded-lg shadow-md"></iframe>`;
-                } else {
-                    plotContainer.innerHTML = `<h3 class="text-xl font-semibold my-4">Equity Curve</h3><div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-lg mt-4" role="alert"><p class="font-bold">Plotting Failed</p><p>The plot could not be created. The statistics above are still valid.</p></div>`;
-                }
-
-
-            } catch (error) {
-                console.error('Error:', error);
-                errorContainer.innerText = 'Error running backtest: ' + error.message;
-            } finally {
-                // Hide loader
-                loader.classList.add('hidden');
-            }
-        });
-    </script>
-</body>
-</html>
-"""
 
 # --- Backtesting Logic ---
 
@@ -288,21 +104,18 @@ def create_plotly_plot(stats, initial_cash, plot_filename, price_data=None):
     fig.update_yaxes(title_text="Drawdown (%)", row=2, col=1)
     fig.write_html(plot_filename, full_html=True)
 
-def make_commission_func(commission_per_share, slippage_cents_per_share):
-    slippage_dollars_per_share = slippage_cents_per_share / 100.0
-
-    def combined_cost(size, price):
-        commission_cost = abs(size) * commission_per_share
-        slippage_cost = abs(size) * slippage_dollars_per_share
-        return commission_cost + slippage_cost
-    return combined_cost
+def make_commission_func(commission_per_share):
+    def cost(size, price):
+        return abs(size) * commission_per_share
+    
+    return cost
 
 
 
 @app.route('/')
 def index():
     """Renders the main HTML page."""
-    return render_template_string(HTML_TEMPLATE)
+    return render_template('index.html')
 
 @app.route('/run_backtest', methods=['POST'])
 def run_backtest():
@@ -377,16 +190,18 @@ def run_backtest():
             'take_profit_multiple': float(request.form.get('take_profit_multiple', 10)),
             'max_leverage': float(request.form.get('max_leverage', 4)),
         }
+
         cash = int(request.form.get('cash', 25000))
         per_share_commission_rate = float(request.form.get('per_share_commission', 0.0005))
-        slippage_cents = float(request.form.get('slippage_cents', 1.0))
-        
-        commission_and_slippage_func = make_commission_func(per_share_commission_rate, slippage_cents)
+        slippage_bps              = float(request.form.get('slippage_bps', 5.0))
+        commission_func = make_commission_func(per_share_commission_rate)
+        spread_fraction = slippage_bps / 10_000.0      
 
         # --- Run the backtest ---
         bt = Backtest(df_strategy, OpeningRangeBreakout, 
                       cash=cash, 
-                      commission=commission_and_slippage_func, 
+                      commission=commission_func, 
+                      spread=spread_fraction,
                       margin=1./params['max_leverage'])
         stats = bt.run(**params)
 
